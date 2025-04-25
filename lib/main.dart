@@ -3,7 +3,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:googleapis_auth/auth_io.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:push_service/fcm_history_entry.dart';
+import 'package:push_service/history_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart'; // Import the package
 
 // --- Configuration ---
@@ -22,9 +25,19 @@ const String _prefsKeyAnalyticsLabel = 'analyticsLabel';
 const String _prefsKeyAndroidPriority = 'selectedAndroidPriority';
 const String _prefsKeyApnsPriority = 'selectedApnsPriority';
 
-void main() {
-  // Ensure WidgetsFlutterBinding is initialized before using plugins like shared_preferences
+const String historyBoxName = 'fcm_send_history';
+
+Future<void> main() async {
+  await runner();
+}
+
+Future<void> runner() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Hive.initFlutter();
+  Hive.registerAdapter(FcmHistoryEntryAdapter());
+  await Hive.openBox<FcmHistoryEntry>(historyBoxName);
+
   runApp(const MyApp());
 }
 
@@ -65,16 +78,16 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
   bool _prefsLoaded = false; // Flag to prevent saving before loading
 
   // Controllers
-  final _projectIdController = TextEditingController(); // Initialize empty
+  final _projectIdController = TextEditingController();
   final _serviceAccountJsonController = TextEditingController();
   final _targetValueController = TextEditingController();
-  final _dataTitleController = TextEditingController(); // These are not saved
+  final _dataTitleController = TextEditingController();
   final _dataBodyController = TextEditingController();
   final _dataDeepLinkController = TextEditingController();
   final _additionalDataJsonController = TextEditingController();
   final _analyticsLabelController = TextEditingController();
 
-  // Dropdown/Radio Values - Initialize with defaults, will be overwritten by prefs
+  // Dropdown/Radio Values
   String _selectedTargetType = targetToken;
   String _selectedAndroidPriority = 'DEFAULT';
   String _selectedApnsPriority = 'DEFAULT';
@@ -82,9 +95,8 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPreferences(); // Load saved settings when the widget initializes
+    _loadPreferences();
 
-    // Add listeners to save text field changes automatically
     _serviceAccountJsonController.addListener(_savePreferences);
     _projectIdController.addListener(_savePreferences);
     _targetValueController.addListener(_savePreferences);
@@ -93,13 +105,11 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
 
   @override
   void dispose() {
-    // Remove listeners to prevent memory leaks
     _serviceAccountJsonController.removeListener(_savePreferences);
     _projectIdController.removeListener(_savePreferences);
     _targetValueController.removeListener(_savePreferences);
     _analyticsLabelController.removeListener(_savePreferences);
 
-    // Dispose controllers
     _projectIdController.dispose();
     _serviceAccountJsonController.dispose();
     _targetValueController.dispose();
@@ -112,57 +122,49 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
   }
 
   // --- Preference Logic ---
-
   Future<void> _loadPreferences() async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     setState(() {
-      // Load Setup
       _serviceAccountJsonController.text = prefs.getString(_prefsKeyServiceAccount) ?? '';
-      _projectIdController.text = prefs.getString(_prefsKeyProjectId) ?? defaultProjectId; // Use default if null
+      _projectIdController.text = prefs.getString(_prefsKeyProjectId) ?? defaultProjectId;
 
-      // Load Targeting
-      _selectedTargetType = prefs.getString(_prefsKeyTargetType) ?? targetToken; // Default to Token
-      _targetValueController.text = prefs.getString(_prefsKeyTargetValue) ?? '';
-      // Handle the 'All Devices' case where value is fixed
-      if (_selectedTargetType == targetAll) {
-        _targetValueController.text = defaultAllDevicesTopic;
+      _selectedTargetType = prefs.getString(_prefsKeyTargetType) ?? targetToken;
+      // Load saved value only if not 'All Devices' mode
+      if (_selectedTargetType != targetAll) {
+        _targetValueController.text = prefs.getString(_prefsKeyTargetValue) ?? '';
+      } else {
+        _targetValueController.text = defaultAllDevicesTopic; // Ensure it's set for display
       }
 
-      // Load Analytics Options
       _analyticsLabelController.text = prefs.getString(_prefsKeyAnalyticsLabel) ?? '';
       _selectedAndroidPriority = prefs.getString(_prefsKeyAndroidPriority) ?? 'DEFAULT';
       _selectedApnsPriority = prefs.getString(_prefsKeyApnsPriority) ?? 'DEFAULT';
 
-      _prefsLoaded = true; // Mark preferences as loaded
+      _prefsLoaded = true;
     });
     _addToLog("Loaded saved preferences.");
   }
 
   Future<void> _savePreferences() async {
-    // Only save if preferences have been loaded initially to avoid overwriting with defaults
     if (!_prefsLoaded) return;
 
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefsKeyServiceAccount, _serviceAccountJsonController.text);
     await prefs.setString(_prefsKeyProjectId, _projectIdController.text);
     await prefs.setString(_prefsKeyTargetType, _selectedTargetType);
-    // Only save target value if not 'All Devices' mode, as it's derived then
+    // Only save target value if not 'All Devices' mode
     if (_selectedTargetType != targetAll) {
       await prefs.setString(_prefsKeyTargetValue, _targetValueController.text);
     } else {
-      await prefs.remove(_prefsKeyTargetValue); // Or save the default, but removing is cleaner
+      await prefs.remove(_prefsKeyTargetValue); // Clean up prefs if switching to All
     }
     await prefs.setString(_prefsKeyAnalyticsLabel, _analyticsLabelController.text);
     await prefs.setString(_prefsKeyAndroidPriority, _selectedAndroidPriority);
     await prefs.setString(_prefsKeyApnsPriority, _selectedApnsPriority);
-
-    // Optional: Log saving action (can be noisy)
-    // print('Preferences saved.');
   }
 
-  // --- Logic Methods (Keep _addToLog, _getAccessToken, _sendFcm, _setStatus as before) ---
+  // --- Logging ---
   void _addToLog(String message) {
-    // Ensure setState is called only if the widget is still mounted
     if (mounted) {
       setState(() {
         final timestamp = DateTime.now().toIso8601String();
@@ -171,6 +173,49 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
     }
   }
 
+  // --- Status Update ---
+  void _setStatus(String message, {bool isError = false}) {
+    if (mounted) {
+      setState(() {
+        _status = message;
+      });
+    }
+  }
+
+  // --- Helper to save history ---
+  Future<void> _saveToHistory({
+    required String targetType, // e.g., 'token', 'topic', or the UI description like targetAll
+    required String targetValue, // The actual token, topic name, or default topic
+    required Map<String, dynamic> payload, // The actual data map sent/attempted
+    String? analyticsLabel,
+    required String status, // e.g., 'Success', 'Validation Success', 'Error: ...'
+    String? responseBody, // The raw response string from FCM or client error
+  }) async {
+    try {
+      await Hive.openBox<FcmHistoryEntry>(historyBoxName); // Open the history box
+      final historyBox = Hive.box<FcmHistoryEntry>(historyBoxName);
+      final entry = FcmHistoryEntry(
+        timestamp: DateTime.now(),
+        targetType: targetType, // Store the logical type
+        targetValue: targetValue,
+        payloadJson: jsonEncode(payload), // Store payload as JSON string
+        analyticsLabel: analyticsLabel,
+        status: status,
+        responseBody: responseBody,
+      );
+      await historyBox.add(entry); // Add to the box
+      _addToLog('Saved send attempt to history.');
+    } catch (e) {
+      _addToLog('Error saving to history: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save to history: $e'), backgroundColor: Colors.orange),
+        );
+      }
+    }
+  }
+
+  // --- Access Token Logic ---
   Future<String?> _getAccessToken(String serviceAccountJson) async {
     _addToLog('Attempting to get access token...');
     try {
@@ -181,12 +226,10 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
       final credentials = ServiceAccountCredentials.fromJson(credentialsJson);
       final scopes = ['https://www.googleapis.com/auth/firebase.messaging'];
 
-      // Use clientViaServiceAccount to get an authenticated client
-      // OR obtain the credentials directly
       final accessCredentials = await obtainAccessCredentialsViaServiceAccount(
         credentials,
         scopes,
-        http.Client(), // You can use a shared client if needed
+        http.Client(),
       );
 
       _addToLog('Access token obtained successfully.');
@@ -202,6 +245,7 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
     }
   }
 
+  // --- Send FCM Logic ---
   Future<void> _sendFcm({required bool validateOnly}) async {
     if (_isLoading) return;
     if (!_formKey.currentState!.validate()) {
@@ -209,9 +253,6 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
       return;
     }
 
-    // --- Make sure preferences are saved before sending (optional but good practice) ---
-    // This ensures the *very latest* state is saved if the user hits send immediately
-    // after typing without triggering a listener save event (less likely but possible)
     await _savePreferences();
 
     setState(() {
@@ -220,23 +261,28 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
       _log = ''; // Clear log on new request
     });
 
-    // --- Values are now read directly from controllers/state variables ---
-    // --- which should reflect the latest user input or loaded prefs ---
     final projectId = _projectIdController.text.trim();
     final serviceAccountJson = _serviceAccountJsonController.text.trim();
-    final targetValue = _targetValueController.text.trim(); // Already updated by user or prefs
-    final additionalDataJson = _additionalDataJsonController.text.trim(); // Not saved/loaded
-    final dataTitle = _dataTitleController.text.trim(); // Not saved/loaded
-    final dataBody = _dataBodyController.text.trim(); // Not saved/loaded
-    final dataDeepLink = _dataDeepLinkController.text.trim(); // Not saved/loaded
-    final analyticsLabel = _analyticsLabelController.text.trim(); // Already updated
+    final targetValueInput = _targetValueController.text.trim(); // User input or default topic
+    final additionalDataJson = _additionalDataJsonController.text.trim();
+    final dataTitle = _dataTitleController.text.trim();
+    final dataBody = _dataBodyController.text.trim();
+    final dataDeepLink = _dataDeepLinkController.text.trim();
+    final analyticsLabel = _analyticsLabelController.text.trim();
     final androidPriority = _selectedAndroidPriority == 'DEFAULT' ? null : _selectedAndroidPriority;
     final apnsPriority = _selectedApnsPriority == 'DEFAULT' ? null : _selectedApnsPriority;
+
+    // --- Declare variables needed for history saving ---
+    String? apiTargetTypeForHistory; // Can be 'token', 'topic'
+    String? apiTargetValueForHistory; // Can be token or topic name
+    Map<String, String> finalDataPayload = {}; // Start empty
+    String finalStatus = 'Send Attempted'; // Default status before API call
+    String? responseBodyContent;
 
     _addToLog('Starting request...');
     _addToLog('Project ID: $projectId');
     _addToLog('Target Type UI: $_selectedTargetType');
-    _addToLog('Target Value Input: $targetValue');
+    _addToLog('Target Value Input: $targetValueInput');
     _addToLog('Validate Only: $validateOnly');
     if (analyticsLabel.isNotEmpty) _addToLog('Analytics Label: $analyticsLabel');
     if (androidPriority != null) _addToLog('Android Priority: $androidPriority');
@@ -245,77 +291,120 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
     // --- Get Access Token ---
     final accessToken = await _getAccessToken(serviceAccountJson);
     if (accessToken == null) {
-      // Error logged & status set within _getAccessToken
-      if (mounted) setState(() => _isLoading = false); // Ensure loading stops
+      // Error already logged & status set in _getAccessToken
+      if (mounted) setState(() => _isLoading = false);
+      // *** Save history entry for auth failure ***
+      await _saveToHistory(
+        targetType: _selectedTargetType, // Use UI selection as context
+        targetValue: targetValueInput,
+        payload: {}, // No payload constructed
+        analyticsLabel: analyticsLabel.isNotEmpty ? analyticsLabel : null,
+        status: _status,
+      );
       return;
     }
 
     // --- Determine API Target ---
-    String? apiTargetType;
-    String? apiTargetValue;
-
     if (_selectedTargetType == targetToken) {
-      apiTargetType = 'token';
-      apiTargetValue = targetValue;
+      apiTargetTypeForHistory = 'token';
+      apiTargetValueForHistory = targetValueInput;
     } else if (_selectedTargetType == targetTopic || _selectedTargetType == targetAll) {
-      apiTargetType = 'topic';
-      // Remove potential /topics/ prefix if user added it
-      apiTargetValue = targetValue.startsWith('/topics/') ? targetValue.substring('/topics/'.length) : targetValue;
-      if (targetValue.startsWith('/topics/')) {
-        _addToLog("Note: Corrected topic name to '$apiTargetValue'.");
+      apiTargetTypeForHistory = 'topic';
+      // Use the corrected topic name (input or default)
+      apiTargetValueForHistory =
+          targetValueInput.startsWith('/topics/') ? targetValueInput.substring('/topics/'.length) : targetValueInput;
+      if (targetValueInput.startsWith('/topics/')) {
+        _addToLog("Note: Corrected topic name to '$apiTargetValueForHistory'.");
       }
     }
 
-    if (apiTargetType == null || apiTargetValue == null || apiTargetValue.isEmpty) {
-      _setStatus('Error: Invalid target configuration.', isError: true);
-      _addToLog('Error: Invalid target type or empty target value.');
+    // This validation should ideally not fail if form validation passed, but check anyway
+    if (apiTargetTypeForHistory == null || apiTargetValueForHistory == null || apiTargetValueForHistory.isEmpty) {
+      finalStatus = 'Error: Invalid target configuration.';
+      _setStatus(finalStatus, isError: true);
+      _addToLog('Error: Invalid API target type or empty target value after processing.');
       if (mounted) setState(() => _isLoading = false);
+      // *** Save history entry for target config failure ***
+      await _saveToHistory(
+        targetType: _selectedTargetType, // UI context
+        targetValue: targetValueInput, // Raw input
+        payload: {},
+        analyticsLabel: analyticsLabel.isNotEmpty ? analyticsLabel : null,
+        status: finalStatus,
+        responseBody: 'Internal error determining API target.',
+      );
       return;
     }
-    _addToLog('API Target Type: $apiTargetType');
-    _addToLog('API Target Value: $apiTargetValue');
+    _addToLog('API Target Type: $apiTargetTypeForHistory');
+    _addToLog('API Target Value: $apiTargetValueForHistory');
 
     // --- Construct Data Payload ---
-    Map<String, String> finalDataPayload = {}; // Ensure Map<String, String>
     if (additionalDataJson.isNotEmpty) {
       try {
         final parsedJson = jsonDecode(additionalDataJson);
         if (parsedJson is Map) {
+          // Convert all keys and values to strings
           finalDataPayload = parsedJson.map((key, value) => MapEntry(key.toString(), value.toString()));
           _addToLog('Base data from JSON: ${jsonEncode(finalDataPayload)}');
         } else {
           throw const FormatException('Additional Data must be a JSON object (Map).');
         }
       } catch (e) {
-        _setStatus('Error: Invalid JSON or structure in Additional Data.', isError: true);
+        finalStatus = 'Error: Invalid JSON or structure in Additional Data.';
+        _setStatus(finalStatus, isError: true);
         _addToLog('Error processing Additional Data JSON: $e');
         if (mounted) setState(() => _isLoading = false);
+        // *** Save history entry for payload JSON failure ***
+        await _saveToHistory(
+          targetType: apiTargetTypeForHistory, // We know it's set now
+          targetValue: apiTargetValueForHistory,
+          payload: {}, // Payload construction failed
+          analyticsLabel: analyticsLabel.isNotEmpty ? analyticsLabel : null,
+          status: finalStatus,
+          responseBody: 'Error parsing input JSON: $e',
+        );
         return;
       }
     }
 
-    // Apply overrides (ensure they are strings)
-    if (dataTitle.isNotEmpty) finalDataPayload['title'] = dataTitle;
-    if (dataBody.isNotEmpty) finalDataPayload['body'] = dataBody;
-    if (dataDeepLink.isNotEmpty) finalDataPayload['deepLink'] = dataDeepLink;
-    if (dataTitle.isNotEmpty) _addToLog("Overwriting/adding 'title'");
-    if (dataBody.isNotEmpty) _addToLog("Overwriting/adding 'body'");
-    if (dataDeepLink.isNotEmpty) _addToLog("Overwriting/adding 'deepLink'");
+    // Apply overrides
+    if (dataTitle.isNotEmpty) {
+      finalDataPayload['title'] = dataTitle;
+      _addToLog("Overwriting/adding 'title'");
+    }
+    if (dataBody.isNotEmpty) {
+      finalDataPayload['body'] = dataBody;
+      _addToLog("Overwriting/adding 'body'");
+    }
+    if (dataDeepLink.isNotEmpty) {
+      finalDataPayload['deepLink'] = dataDeepLink;
+      _addToLog("Overwriting/adding 'deepLink'");
+    }
 
+    // Check if payload is empty *after* overrides
     if (finalDataPayload.isEmpty && !validateOnly) {
-      _setStatus('Error: Resulting data payload is empty.', isError: true);
+      finalStatus = 'Error: Resulting data payload is empty.';
+      _setStatus(finalStatus, isError: true);
       _addToLog('Aborted: Cannot send empty data payload.');
       if (mounted) setState(() => _isLoading = false);
+      // *** Save history entry for empty payload failure ***
+      await _saveToHistory(
+        targetType: apiTargetTypeForHistory,
+        targetValue: apiTargetValueForHistory,
+        payload: finalDataPayload, // It's empty here
+        analyticsLabel: analyticsLabel.isNotEmpty ? analyticsLabel : null,
+        status: finalStatus,
+      );
       return;
     } else if (finalDataPayload.isEmpty && validateOnly) {
       _addToLog('Warning: Resulting data payload is empty for validation.');
+      // Allow validation of empty payload
     }
 
     _addToLog('Final Data Payload Content: ${jsonEncode(finalDataPayload)}');
 
-    // --- Construct FCM Message ---
     final Map<String, dynamic> message = {
-      apiTargetType: apiTargetValue,
+      apiTargetTypeForHistory: apiTargetValueForHistory,
       'data': finalDataPayload,
     };
 
@@ -345,14 +434,16 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
       const encoder = JsonEncoder.withIndent('  ');
       _addToLog(encoder.convert(requestBody));
     } catch (_) {
-      _addToLog(body);
+      _addToLog(body); // Fallback if encoding fails
     }
     _addToLog('--------------------');
     _addToLog('Sending FCM message to $url...');
 
-    // --- Send HTTP Request ---
+    // --- Send HTTP Request & Update Status ---
     try {
       final response = await http.post(url, headers: headers, body: body);
+      responseBodyContent = response.body; // Capture response body
+
       _addToLog('--- FCM API Call Completed ---');
       _addToLog('Status Code: ${response.statusCode}');
       _addToLog('Response Body:');
@@ -361,56 +452,66 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
         const encoder = JsonEncoder.withIndent('  ');
         _addToLog(encoder.convert(responseJson));
       } catch (_) {
-        _addToLog(response.body);
+        _addToLog(response.body); // Log raw body if JSON parsing fails
       }
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        _setStatus(validateOnly ? 'Validation Success!' : 'Success!');
+        finalStatus = validateOnly ? 'Validation Success!' : 'Success!';
+        _setStatus(finalStatus);
       } else {
-        _setStatus('Error sending message. Status: ${response.statusCode}. See log.', isError: true);
+        finalStatus = 'Error sending message. Status: ${response.statusCode}';
+        _setStatus(finalStatus, isError: true);
         _addToLog('--- Failing Request Body (Sent) ---');
-        try {
-          const encoder = JsonEncoder.withIndent('  ');
-          _addToLog(encoder.convert(requestBody));
-        } catch (_) {
-          _addToLog(body);
-        }
+        _addToLog(body); // Log the body that caused the failure
         _addToLog('---------------------------------');
       }
     } catch (e, s) {
-      _setStatus('Error: Network request failed or unexpected error.', isError: true);
+      finalStatus = 'Error: Network request failed or unexpected error.';
+      responseBodyContent = "Client-side error during HTTP POST: $e\nStack: $s"; // Capture client error details
+      _setStatus(finalStatus, isError: true);
       _addToLog('An unexpected error occurred during HTTP request: $e');
       _addToLog('Stack trace: $s');
       _addToLog('--- Failing Request Body (Attempted) ---');
-      try {
-        const encoder = JsonEncoder.withIndent('  ');
-        _addToLog(encoder.convert(requestBody));
-      } catch (_) {
-        _addToLog(body);
-      }
+      _addToLog(body); // Log the body that was attempted
       _addToLog('--------------------------------------');
     } finally {
+      // *** Save history entry AFTER the attempt (success or failure) ***
+      await _saveToHistory(
+        targetType: apiTargetTypeForHistory, // Use determined API type
+        targetValue: apiTargetValueForHistory, // Use determined API value
+        payload: finalDataPayload, // The actual payload sent/attempted
+        analyticsLabel: analyticsLabel.isNotEmpty ? analyticsLabel : null,
+        status: finalStatus, // Status determined above
+        responseBody: responseBodyContent, // Captured response or error
+      );
+
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
 
-  void _setStatus(String message, {bool isError = false}) {
-    if (mounted) {
-      setState(() {
-        _status = message;
-      });
-    }
-  }
-
   // --- Build Method (UI) ---
   @override
   Widget build(BuildContext context) {
-    // Reorder the sections as they were originally in your code
     return Scaffold(
       appBar: AppBar(
         title: const Text('Simple FCM Data Sender'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            tooltip: 'View Send History',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HistoryScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -478,21 +579,23 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                 ],
               ),
               const SizedBox(height: 20),
+
+              // --- Section 1: Data Payload ---
               _buildSectionHeader('1. Data Payload Content'),
               const Text('Optional overrides (will replace keys in JSON data):'),
               const SizedBox(height: 8),
               TextFormField(
-                controller: _dataTitleController, // Not saved
+                controller: _dataTitleController,
                 decoration: const InputDecoration(labelText: "Title Override (Optional - 'title' key)"),
               ),
               const SizedBox(height: 12),
               TextFormField(
-                controller: _dataBodyController, // Not saved
+                controller: _dataBodyController,
                 decoration: const InputDecoration(labelText: "Body Override (Optional - 'body' key)"),
               ),
               const SizedBox(height: 12),
               TextFormField(
-                controller: _dataDeepLinkController, // Not saved
+                controller: _dataDeepLinkController,
                 decoration: const InputDecoration(labelText: "Deep Link Override (Optional - 'deepLink' key)"),
               ),
               const SizedBox(height: 16),
@@ -501,15 +604,15 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
               const Text('Base key-value pairs (valid JSON object):'),
               const SizedBox(height: 8),
               TextFormField(
-                controller: _additionalDataJsonController, // Not saved
+                controller: _additionalDataJsonController,
                 decoration: const InputDecoration(
                   labelText: 'Additional Data (JSON Object)',
                   hintText: '{\n  "customKey": "customValue",\n  "data_id": "123"\n}',
                   alignLabelWithHint: true,
                 ),
-                maxLines: 6, minLines: 3,
+                maxLines: 6,
+                minLines: 3,
                 validator: (value) {
-                  /* Validator remains the same */
                   if (value != null && value.trim().isNotEmpty) {
                     try {
                       final decoded = jsonDecode(value);
@@ -518,13 +621,16 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                       return 'Invalid JSON format';
                     }
                   }
+                  // Allow empty or null input here, handle empty payload logic in _sendFcm
                   return null;
                 },
               ),
               const SizedBox(height: 20),
-              _buildSectionHeader('2. Analytics Options'),
+
+              // --- Section 2: Analytics & Priority ---
+              _buildSectionHeader('2. Analytics & Priority'),
               TextFormField(
-                controller: _analyticsLabelController, // Listener attached in initState
+                controller: _analyticsLabelController,
                 decoration: const InputDecoration(labelText: 'Analytics Label (Optional)'),
               ),
               const SizedBox(height: 16),
@@ -540,7 +646,7 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                       onChanged: (value) {
                         if (value != null && value != _selectedAndroidPriority) {
                           setState(() => _selectedAndroidPriority = value);
-                          _savePreferences(); // Save the change
+                          _savePreferences();
                         }
                       },
                     ),
@@ -567,7 +673,7 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                       onChanged: (value) {
                         if (value != null && value != _selectedApnsPriority) {
                           setState(() => _selectedApnsPriority = value);
-                          _savePreferences(); // Save the change
+                          _savePreferences();
                         }
                       },
                     ),
@@ -575,7 +681,9 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              _buildSectionHeader('2. Targeting'),
+
+              // --- Section 3: Targeting ---
+              _buildSectionHeader('3. Targeting'),
               Column(
                 children: [
                   RadioListTile<String>(
@@ -586,9 +694,9 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                       if (value != null && value != _selectedTargetType) {
                         setState(() {
                           _selectedTargetType = value;
-                          _targetValueController.clear(); // Clear value when changing type
+                          _targetValueController.clear(); // Clear specific value when switching
                         });
-                        _savePreferences(); // Save the change
+                        _savePreferences();
                       }
                     },
                     contentPadding: EdgeInsets.zero,
@@ -627,7 +735,7 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
               ),
               const SizedBox(height: 12),
               TextFormField(
-                controller: _targetValueController, // Listener attached in initState
+                controller: _targetValueController,
                 decoration: InputDecoration(
                   labelText: _selectedTargetType == targetToken ? 'Device Token' : 'Topic Name',
                   hintText: _selectedTargetType == targetToken
@@ -635,34 +743,38 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                       : _selectedTargetType == targetAll
                           ? 'Using topic: $defaultAllDevicesTopic'
                           : 'Enter topic name (e.g., news)',
-                  enabled: _selectedTargetType != targetAll,
+                  enabled: _selectedTargetType != targetAll, // Disable editing for 'All'
+                  filled: _selectedTargetType == targetAll, // Visually indicate read-only
+                  fillColor: _selectedTargetType == targetAll ? Colors.grey.shade200 : null,
                 ),
-                readOnly: _selectedTargetType == targetAll,
+                readOnly: _selectedTargetType == targetAll, // Make it truly read-only
                 validator: (value) {
-                  /* Validator remains the same */
-                  if (value == null || value.trim().isEmpty) {
+                  // Only validate if NOT in 'All Devices' mode
+                  if (_selectedTargetType != targetAll && (value == null || value.trim().isEmpty)) {
                     return 'Target ${_selectedTargetType == targetToken ? 'Token' : 'Topic'} is required';
                   }
-                  return null;
+                  return null; // No error if 'All Devices' or if value is present otherwise
                 },
               ),
               const SizedBox(height: 20),
+
+              // --- Section 4: Setup ---
               _buildSectionHeader('4. Setup'),
               const Text(
-                '🚨 Security Warning: Paste your Service Account JSON content below. User Service Json account should be handled very carefully, not to be shared with anyone not in Nexus',
+                '🚨 Security Warning: Paste your Service Account JSON content below. Handle this securely do not share with anyone, that should not be able to send push.',
                 style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               TextFormField(
-                controller: _serviceAccountJsonController, // Listener attached in initState
+                controller: _serviceAccountJsonController,
                 decoration: const InputDecoration(
                   labelText: 'Service Account JSON Content',
                   hintText: 'Paste the entire content of your service_account.json file here...',
                   alignLabelWithHint: true,
                 ),
-                maxLines: 5, minLines: 3,
+                maxLines: 5,
+                minLines: 3,
                 validator: (value) {
-                  /* Validator remains the same */
                   if (value == null || value.trim().isEmpty) return 'Service Account JSON is required';
                   try {
                     final decoded = jsonDecode(value);
@@ -680,15 +792,16 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
               ),
               const SizedBox(height: 12),
               TextFormField(
-                controller: _projectIdController, // Listener attached in initState
+                controller: _projectIdController,
                 decoration: const InputDecoration(labelText: 'Firebase Project ID'),
                 validator: (value) {
-                  /* Validator remains the same */
                   if (value == null || value.trim().isEmpty) return 'Project ID is required';
                   return null;
                 },
               ),
               const SizedBox(height: 20),
+
+              // --- Section 5: Log ---
               _buildSectionHeader('5. Execution Log / API Response'),
               Container(
                 height: 250,
@@ -699,13 +812,14 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                   color: Colors.grey.shade100,
                 ),
                 child: SingleChildScrollView(
-                  reverse: true,
+                  reverse: true, // Keep latest logs visible
                   child: SelectableText(
                     _log.isEmpty ? 'Log output will appear here...' : _log,
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                   ),
                 ),
               ),
+              const SizedBox(height: 20), // Add some padding at the bottom
             ],
           ),
         ),
