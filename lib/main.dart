@@ -25,6 +25,8 @@ const String _prefsKeyAnalyticsLabel = 'analyticsLabel';
 const String _prefsKeyAndroidPriority = 'selectedAndroidPriority';
 const String _prefsKeyApnsPriority = 'selectedApnsPriority';
 
+const String _prefsKeyTheme = 'themeKey';
+
 const String historyBoxName = 'fcm_send_history';
 
 Future<void> main() async {
@@ -38,32 +40,65 @@ Future<void> runner() async {
   Hive.registerAdapter(FcmHistoryEntryAdapter());
   await Hive.openBox<FcmHistoryEntry>(historyBoxName);
 
-  runApp(const MyApp());
+  final SharedPreferences prefs = await SharedPreferences.getInstance();
+  final themeValue = prefs.getString(_prefsKeyTheme);
+
+  final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(
+    themeValue == 'light' ? ThemeMode.light : ThemeMode.dark,
+  );
+
+  runApp(MyApp(themeNotifier: themeNotifier));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final ValueNotifier<ThemeMode> themeNotifier;
+
+  const MyApp({super.key, required this.themeNotifier});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'FCM Sender',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
-          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-        ),
-        visualDensity: VisualDensity.adaptivePlatformDensity,
+    final ThemeData lightTheme = ThemeData(
+      brightness: Brightness.light,
+      primarySwatch: Colors.blue,
+      useMaterial3: true,
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       ),
-      home: const FcmSenderScreen(),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+    );
+
+    final ThemeData darkTheme = ThemeData(
+      brightness: Brightness.dark,
+      primarySwatch: Colors.blue,
+      useMaterial3: true,
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+      ),
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+    );
+
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeNotifier,
+      builder: (_, mode, __) {
+        return MaterialApp(
+          title: 'FCM Sender',
+          theme: lightTheme, // Provide light theme
+          darkTheme: darkTheme, // Provide dark theme
+          themeMode: mode, // Use the current mode from notifier
+          home: FcmSenderScreen(themeNotifier: themeNotifier), // Pass notifier down
+        );
+      },
     );
   }
 }
 
+// --- MODIFIED: Accept theme notifier ---
 class FcmSenderScreen extends StatefulWidget {
-  const FcmSenderScreen({super.key});
+  final ValueNotifier<ThemeMode> themeNotifier; // Accept notifier
+
+  const FcmSenderScreen({super.key, required this.themeNotifier}); // Update constructor
 
   @override
   State<FcmSenderScreen> createState() => _FcmSenderScreenState();
@@ -494,6 +529,19 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
   // --- Build Method (UI) ---
   @override
   Widget build(BuildContext context) {
+    // Use Theme.of(context) to adapt colors if needed (optional, basic themes handle most)
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final Color errorColor = isDarkMode ? Colors.red.shade300 : Colors.red.shade900;
+    final Color successColor = isDarkMode ? Colors.green.shade300 : Colors.green.shade900;
+    final Color errorBgColor = isDarkMode ? Colors.red.shade800.withOpacity(0.3) : Colors.red.shade100;
+    final Color successBgColor = isDarkMode ? Colors.green.shade800.withOpacity(0.3) : Colors.green.shade100;
+    final Color errorBorderColor = isDarkMode ? Colors.red.shade500 : Colors.red.shade300;
+    final Color successBorderColor = isDarkMode ? Colors.green.shade500 : Colors.green.shade300;
+    final Color disabledFillColor = Theme.of(context).disabledColor.withOpacity(0.1);
+    final Color logBgColor = Theme.of(context).colorScheme.surfaceVariant;
+    final Color logTextColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    final Color logBorderColor = Theme.of(context).dividerColor;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Simple FCM Data Sender'),
@@ -520,28 +568,26 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // --- Status Display ---
               Container(
                 padding: const EdgeInsets.all(12),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: _status.toLowerCase().contains('error') ? Colors.red.shade100 : Colors.green.shade100,
+                  color: _status.toLowerCase().contains('error') ? errorBgColor : successBgColor,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: _status.toLowerCase().contains('error') ? Colors.red.shade300 : Colors.green.shade300,
+                    color: _status.toLowerCase().contains('error') ? errorBorderColor : successBorderColor,
                   ),
                 ),
                 child: Text(
                   'Status: $_status',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
-                    color: _status.toLowerCase().contains('error') ? Colors.red.shade900 : Colors.green.shade900,
+                    color: _status.toLowerCase().contains('error') ? errorColor : successColor,
                   ),
                   textAlign: TextAlign.center,
                 ),
               ),
 
-              // --- Action Buttons ---
               Row(
                 children: [
                   Expanded(
@@ -571,7 +617,7 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                       label: const Text('Validate Only'),
                       onPressed: _isLoading ? null : () => _sendFcm(validateOnly: true),
                       style: ElevatedButton.styleFrom(
-                        side: const BorderSide(color: Colors.blue),
+                        side: BorderSide(color: Theme.of(context).colorScheme.primary),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
@@ -745,7 +791,7 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                           : 'Enter topic name (e.g., news)',
                   enabled: _selectedTargetType != targetAll, // Disable editing for 'All'
                   filled: _selectedTargetType == targetAll, // Visually indicate read-only
-                  fillColor: _selectedTargetType == targetAll ? Colors.grey.shade200 : null,
+                  fillColor: _selectedTargetType == targetAll ? disabledFillColor : null, // Theme-aware fill
                 ),
                 readOnly: _selectedTargetType == targetAll, // Make it truly read-only
                 validator: (value) {
@@ -807,19 +853,54 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                 height: 250,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400),
+                  border: Border.all(color: logBorderColor),
                   borderRadius: BorderRadius.circular(4),
-                  color: Colors.grey.shade100,
+                  color: logBgColor,
                 ),
                 child: SingleChildScrollView(
                   reverse: true, // Keep latest logs visible
                   child: SelectableText(
                     _log.isEmpty ? 'Log output will appear here...' : _log,
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                    style: TextStyle(fontFamily: 'monospace', fontSize: 12, color: logTextColor), // Use theme color
                   ),
                 ),
               ),
-              const SizedBox(height: 20), // Add some padding at the bottom
+              const SizedBox(height: 20),
+
+              const Divider(height: 30),
+              _buildSectionHeader('App Theme'),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.wb_sunny_outlined),
+                    label: const Text('Light'),
+                    onPressed: () async {
+                      widget.themeNotifier.value = ThemeMode.light;
+                      final SharedPreferences prefs = await SharedPreferences.getInstance();
+                      await prefs.setString(_prefsKeyTheme, 'light');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: !isDarkMode ? Theme.of(context).colorScheme.primary : null,
+                      foregroundColor: !isDarkMode ? Theme.of(context).colorScheme.onPrimary : null,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.brightness_2_outlined),
+                    label: const Text('Dark'),
+                    onPressed: () async {
+                      widget.themeNotifier.value = ThemeMode.dark;
+                      final SharedPreferences prefs = await SharedPreferences.getInstance();
+                      await prefs.setString(_prefsKeyTheme, 'dark');
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDarkMode ? Theme.of(context).colorScheme.primary : null,
+                      foregroundColor: isDarkMode ? Theme.of(context).colorScheme.onPrimary : null,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
