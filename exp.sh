@@ -11,4 +11,4 @@ if [ ! -d "$SCRIPT_DIR" ]; then
 fi
 
 # Run the exporter.py script with the provided arguments
-python3 "$SCRIPT_DIR/exporter.py" "../lib/src"
+python3 "$SCRIPT_DIR/exporter.py" "../lib"

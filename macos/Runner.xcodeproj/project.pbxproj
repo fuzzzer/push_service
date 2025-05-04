@@ -601,7 +601,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -732,7 +732,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -757,7 +757,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -850,7 +850,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat.dev";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service.dev";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -951,7 +951,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat.dev";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service.dev";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -1045,7 +1045,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat.dev";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service.dev";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -1138,7 +1138,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat.dev";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service.dev";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -1231,7 +1231,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat.dev";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service.dev";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
@@ -1324,7 +1324,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.secure-chat.dev";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.fuzzzytechnologies.fuzzy-push-service.dev";
 				PRODUCT_NAME = "$(FLAVOR_APP_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;

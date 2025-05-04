@@ -1,10 +1,9 @@
-// lib/history_screen.dart
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:intl/intl.dart'; // For date formatting (add dependency if needed)
-import 'fcm_history_entry.dart'; // Import model
-import 'main.dart'; // Import main to access historyBoxName
+import 'package:intl/intl.dart';
+import 'fcm_history_entry_old.dart';
+import 'main.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -14,21 +13,20 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  late Box<FcmHistoryEntry> _historyBox;
+  late Box<FcmHistoryEntryOld> _historyBox;
 
   @override
   void initState() {
     super.initState();
-    _historyBox = Hive.box<FcmHistoryEntry>(historyBoxName);
+    _historyBox = Hive.box<FcmHistoryEntryOld>(historyBoxName);
   }
 
-  // Function to format JSON nicely
   String _formatJson(String jsonString) {
     try {
       const encoder = JsonEncoder.withIndent('  ');
       return encoder.convert(jsonDecode(jsonString));
     } catch (e) {
-      return jsonString; // Return original if parsing fails
+      return jsonString;
     }
   }
 
@@ -53,7 +51,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     if (confirm == true) {
       await _historyBox.clear();
-      // No need for setState here as ValueListenableBuilder handles updates
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('History cleared.'), duration: Duration(seconds: 2)),
@@ -68,28 +66,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
       appBar: AppBar(
         title: const Text('FCM Send History'),
         actions: [
-          // Use ValueListenableBuilder to enable/disable clear button
           ValueListenableBuilder(
             valueListenable: _historyBox.listenable(),
-            builder: (context, Box<FcmHistoryEntry> box, _) {
+            builder: (context, Box<FcmHistoryEntryOld> box, _) {
               return IconButton(
                 icon: const Icon(Icons.delete_sweep),
                 tooltip: 'Clear All History',
-                onPressed: box.isEmpty ? null : _clearHistory, // Disable if empty
+                onPressed: box.isEmpty ? null : _clearHistory,
               );
             },
           ),
         ],
       ),
       body: ValueListenableBuilder(
-        // Listen to the box for changes (add, delete, clear)
         valueListenable: _historyBox.listenable(),
-        builder: (context, Box<FcmHistoryEntry> box, _) {
+        builder: (context, Box<FcmHistoryEntryOld> box, _) {
           if (box.isEmpty) {
             return const Center(child: Text('No history yet.'));
           }
 
-          // Display newest first
           final entries = box.values.toList().reversed.toList();
 
           return ListView.builder(
@@ -110,17 +105,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   title:
                       Text('${entry.targetType}: ${entry.targetValue}', maxLines: 1, overflow: TextOverflow.ellipsis),
                   subtitle: Text('Sent: $formattedDate\nStatus: ${entry.status ?? 'N/A'}'),
+                  textColor: Colors.black,
                   isThreeLine: true,
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
-                    // Show details in a dialog
                     showDialog(
                       context: context,
                       builder: (context) => AlertDialog(
                         title: Text('History Detail - $formattedDate'),
                         content: SingleChildScrollView(
                           child: SelectionArea(
-                            // Allow copying text
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               mainAxisSize: MainAxisSize.min,
@@ -136,13 +130,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade100,
+                                    color: Colors.black,
                                     borderRadius: BorderRadius.circular(4),
                                     border: Border.all(color: Colors.grey.shade300),
                                   ),
                                   child: Text(
                                     _formatJson(entry.payloadJson),
-                                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                                    style: const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.white),
                                   ),
                                 ),
                                 if (entry.responseBody != null && entry.responseBody!.isNotEmpty) ...[
@@ -152,13 +146,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
-                                      color: Colors.grey.shade100,
+                                      color: Colors.black,
                                       borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(color: Colors.grey.shade300),
+                                      border: Border.all(color: Colors.white),
                                     ),
                                     child: Text(
-                                      _formatJson(entry.responseBody!), // Format response too
-                                      style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                                      _formatJson(entry.responseBody!),
+                                      style:
+                                          const TextStyle(fontFamily: 'monospace', fontSize: 12, color: Colors.white),
                                     ),
                                   ),
                                 ],
