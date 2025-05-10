@@ -35,7 +35,7 @@ class PreferencesService {
     final themeString = _prefs.getString(PREFS_KEY_THEME) ?? 'dark';
 
     String targetValue = '';
-    if (targetType == TargetType.all) {
+    if (targetType == TargetType.allChosenDevices) {
       targetValue = DEFAULT_ALL_DEVICES_TOPIC;
     } else {
       targetValue = _prefs.getString(PREFS_KEY_TARGET_VALUE) ?? '';
@@ -61,7 +61,7 @@ class PreferencesService {
 
   Future<void> saveTarget({required TargetType type, required String value}) async {
     await _prefs.setString(PREFS_KEY_TARGET_TYPE, _targetTypeToString(type));
-    if (type != TargetType.all) {
+    if (type != TargetType.allChosenDevices) {
       await _prefs.setString(PREFS_KEY_TARGET_VALUE, value);
     } else {
       await _prefs.remove(PREFS_KEY_TARGET_VALUE);
@@ -78,7 +78,7 @@ class PreferencesService {
       case TARGET_TOPIC:
         return TargetType.topic;
       case TARGET_ALL:
-        return TargetType.all;
+        return TargetType.allChosenDevices;
       default:
         return TargetType.token;
     }
@@ -90,7 +90,7 @@ class PreferencesService {
         return TARGET_TOKEN;
       case TargetType.topic:
         return TARGET_TOPIC;
-      case TargetType.all:
+      case TargetType.allChosenDevices:
         return TARGET_ALL;
     }
   }

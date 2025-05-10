@@ -49,8 +49,6 @@ class FcmRepositoryAndroid {
       );
       encodedRequestBody = jsonEncode(requestBodyMap);
 
-      print('print $requestBodyMap');
-
       final Uri requestUrl = _buildRequestUrl(config.projectId);
       final Map<String, String> requestHeaders = _buildRequestHeaders(accessToken);
       final http.Response response = await _executeFcmRequest(
@@ -85,20 +83,14 @@ class FcmRepositoryAndroid {
     required FcmMessageData messageData,
     required bool validateOnly,
   }) {
-    return {
+    final fullBody = {
       if (validateOnly) 'validate_only': true,
       'message': {
-        apiTargetType: apiTargetValue,
+        apiTargetType: apiTargetValue == DEFAULT_ALL_DEVICES_TOPIC ? DEFAULT_ANDROID_DEVICES_TOPIC : apiTargetValue,
         'data': dataPayload,
         if (messageData.androidPriority != null && messageData.androidPriority != 'DEFAULT')
           'android': {
             'priority': messageData.androidPriority,
-          },
-        if (messageData.apnsPriority != null && messageData.apnsPriority != 'DEFAULT')
-          'apns': {
-            'headers': {
-              'apns-priority': messageData.apnsPriority!,
-            },
           },
         if (messageData.analyticsLabel != null && messageData.analyticsLabel!.isNotEmpty)
           'fcm_options': {
@@ -106,6 +98,42 @@ class FcmRepositoryAndroid {
           },
       },
     };
+
+    debugPrint('print android $fullBody');
+
+    return fullBody;
+
+    //TODO test and modify necessary things
+    // return {
+    //   "message": {
+    //     "token":
+    //         "fHleZ44HDkwwu_R70GO5um:APA91bFlE7JwKZDRBwCuF-xtQkpdBgefPJ_PWXlh17nleMI6uNAYl-sGaq2YNaN-qaC-6A8RhBriS-ZzYyTlAl8gFV9BhG34xaflMY8xXwFpDjvwPx-PMLU",
+    // "data": {
+    //   "title": "Title",
+    //   "body": "bodeyyy",
+    // },
+    // "notification": {
+    //   "title": "Hello from test!",
+    //   "body": "This is a test notification.",
+    // },
+    //     "android": {
+    //       "notification": {
+    //         "title": "Android Title",
+    //         "body": "Android-specific notification body",
+    //         "icon": "ic_notification",
+    //         "color": "#FF0000"
+    //       },
+    //     },
+    //     "apns": {
+    //       "payload": {
+    //         "aps": {
+    //           "alert": {"title": "iOS Title", "body": "iOS-specific notification body"},
+    //           "sound": "default"
+    //         }
+    //       }
+    //     }
+    //   }
+    // };
   }
 
   Future<String?> _getAccessToken(String serviceAccountJson) async {
@@ -136,7 +164,7 @@ class FcmRepositoryAndroid {
         apiTargetType = 'token';
         apiTargetValue = messageData.targetValue;
       case TargetType.topic:
-      case TargetType.all:
+      case TargetType.allChosenDevices:
         apiTargetType = 'topic';
         apiTargetValue = messageData.targetValue.startsWith('/topics/')
             ? messageData.targetValue.substring('/topics/'.length)
@@ -159,14 +187,17 @@ class FcmRepositoryAndroid {
         throw const FormatException('Invalid JSON structure: Additional Data must be an object.');
       }
     }
-    if (messageData.titleOverride != null && messageData.titleOverride!.isNotEmpty) {
-      payload['title'] = messageData.titleOverride!;
+
+    //TODO if needed only add title and body for android messages
+
+    if (messageData.title != null && messageData.title!.isNotEmpty) {
+      payload['title'] = messageData.title!;
     }
-    if (messageData.bodyOverride != null && messageData.bodyOverride!.isNotEmpty) {
-      payload['body'] = messageData.bodyOverride!;
+    if (messageData.body != null && messageData.body!.isNotEmpty) {
+      payload['body'] = messageData.body!;
     }
-    if (messageData.deepLinkOverride != null && messageData.deepLinkOverride!.isNotEmpty) {
-      payload['deepLink'] = messageData.deepLinkOverride!;
+    if (messageData.deepLink != null && messageData.deepLink!.isNotEmpty) {
+      payload['deepLink'] = messageData.deepLink!;
     }
     return payload;
   }

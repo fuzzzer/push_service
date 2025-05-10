@@ -6,9 +6,9 @@ class FcmMessageData {
   final TargetType targetType;
   final TargetDevice targetDevice;
   final String targetValue; // Actual token or topic name
-  final String? titleOverride;
-  final String? bodyOverride;
-  final String? deepLinkOverride;
+  final String? title;
+  final String? body;
+  final String? deepLink;
   final String? additionalDataJson; // Raw JSON string for additional data
   final String? analyticsLabel;
   final String? androidPriority; // 'NORMAL', 'HIGH', or null for default
@@ -18,9 +18,9 @@ class FcmMessageData {
     required this.targetType,
     required this.targetDevice,
     required this.targetValue,
-    this.titleOverride,
-    this.bodyOverride,
-    this.deepLinkOverride,
+    this.title,
+    this.body,
+    this.deepLink,
     this.additionalDataJson,
     this.analyticsLabel,
     this.androidPriority,

@@ -4,12 +4,14 @@
 const String DEFAULT_PROJECT_ID = 'super-app-staging-3154d'; // Your Default Project ID
 const String TARGET_TOKEN = 'Specific Device (Token)';
 const String TARGET_TOPIC = 'Specific Topic';
-const String TARGET_ALL = 'All Devices (via Topic)';
-const String DEFAULT_ALL_DEVICES_TOPIC = 'all';
+const String TARGET_ALL = 'All Chosen Devices';
+const String DEFAULT_ALL_DEVICES_TOPIC = 'ios, android';
+const String DEFAULT_IOS_DEVICES_TOPIC = 'ios';
+const String DEFAULT_ANDROID_DEVICES_TOPIC = 'android';
 
-enum TargetType { token, topic, all }
+enum TargetType { token, topic, allChosenDevices }
 
-enum TargetDevice { ios, android }
+enum TargetDevice { ios, android, all }
 
 // --- Preference Keys ---
 const String PREFS_KEY_SERVICE_ACCOUNT = 'serviceAccountJson';

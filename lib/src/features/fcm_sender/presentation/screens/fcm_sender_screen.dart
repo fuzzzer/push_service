@@ -101,10 +101,14 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
       _projectIdController.text = state.projectId;
     }
 
-    if (state.targetType != TargetType.all && _targetValueController.text != state.targetValue) {
+    if (state.targetType != TargetType.allChosenDevices && _targetValueController.text != state.targetValue) {
       _targetValueController.text = state.targetValue;
-    } else if (state.targetType == TargetType.all) {
-      _targetValueController.text = DEFAULT_ALL_DEVICES_TOPIC;
+    } else if (state.targetType == TargetType.allChosenDevices) {
+      _targetValueController.text = switch (state.targetDevice) {
+        TargetDevice.all => DEFAULT_ALL_DEVICES_TOPIC,
+        TargetDevice.android => DEFAULT_ANDROID_DEVICES_TOPIC,
+        TargetDevice.ios => DEFAULT_IOS_DEVICES_TOPIC,
+      };
     }
 
     if (_analyticsLabelController.text != state.analyticsLabel) {
@@ -345,6 +349,50 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                     ),
                     const SizedBox(height: 20),
                     const SectionHeader('3. Targeting'),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: SegmentedButton<TargetDevice>(
+                        segments: const <ButtonSegment<TargetDevice>>[
+                          ButtonSegment<TargetDevice>(
+                            value: TargetDevice.all,
+                            label: Text('All'),
+                            icon: Icon(Icons.all_out),
+                          ),
+                          ButtonSegment<TargetDevice>(
+                            value: TargetDevice.android,
+                            label: Text('Android'),
+                            icon: Icon(Icons.android),
+                          ),
+                          ButtonSegment<TargetDevice>(
+                            value: TargetDevice.ios,
+                            label: Text('iOS'),
+                            icon: Icon(Icons.apple),
+                          ),
+                        ],
+                        selected: <TargetDevice>{state.targetDevice},
+                        onSelectionChanged: isLoading
+                            ? null
+                            : (Set<TargetDevice> newSelection) {
+                                context.read<FcmSenderCubit>().updateTargetDevice(newSelection.first);
+
+                                if (state.targetType != TargetType.allChosenDevices) {
+                                  return;
+                                }
+
+                                if (newSelection.first == TargetDevice.all) {
+                                  _targetValueController.text = DEFAULT_ALL_DEVICES_TOPIC;
+                                } else if (newSelection.first == TargetDevice.android) {
+                                  _targetValueController.text = DEFAULT_ANDROID_DEVICES_TOPIC;
+                                } else if (newSelection.first == TargetDevice.ios) {
+                                  _targetValueController.text = DEFAULT_IOS_DEVICES_TOPIC;
+                                }
+                              },
+                        showSelectedIcon: false,
+                        style: SegmentedButton.styleFrom(
+                          minimumSize: const Size(48, 48),
+                        ),
+                      ),
+                    ),
                     Column(
                       children: [
                         RadioListTile<TargetType>(
@@ -359,8 +407,8 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                           contentPadding: EdgeInsets.zero,
                         ),
                         RadioListTile<TargetType>(
-                          title: const Text(TARGET_TOPIC),
-                          value: TargetType.topic,
+                          title: const Text(TARGET_ALL),
+                          value: TargetType.allChosenDevices,
                           groupValue: state.targetType,
                           onChanged: isLoading
                               ? null
@@ -369,16 +417,21 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                                 },
                           contentPadding: EdgeInsets.zero,
                         ),
-                        RadioListTile<TargetType>(
-                          title: const Text(TARGET_ALL),
-                          value: TargetType.all,
-                          groupValue: state.targetType,
-                          onChanged: isLoading
-                              ? null
-                              : (value) {
-                                  if (value != null) context.read<FcmSenderCubit>().updateTargetType(value);
-                                },
-                          contentPadding: EdgeInsets.zero,
+                        Opacity(
+                          opacity: 0.4,
+                          child: AbsorbPointer(
+                            child: RadioListTile<TargetType>(
+                              title: const Text(TARGET_TOPIC),
+                              value: TargetType.topic,
+                              groupValue: state.targetType,
+                              onChanged: isLoading
+                                  ? null
+                                  : (value) {
+                                      if (value != null) context.read<FcmSenderCubit>().updateTargetType(value);
+                                    },
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -389,16 +442,17 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
                         labelText: state.targetType == TargetType.token ? 'Device Token' : 'Topic Name',
                         hintText: state.targetType == TargetType.token
                             ? 'Enter device FCM token...'
-                            : state.targetType == TargetType.all
+                            : state.targetType == TargetType.allChosenDevices
                                 ? 'Using topic: $DEFAULT_ALL_DEVICES_TOPIC'
                                 : 'Enter topic name (e.g., news)',
-                        enabled: !isLoading && state.targetType != TargetType.all,
-                        filled: state.targetType == TargetType.all,
-                        fillColor: state.targetType == TargetType.all ? disabledFillColor : null,
+                        enabled: !isLoading && state.targetType != TargetType.allChosenDevices,
+                        filled: state.targetType == TargetType.allChosenDevices,
+                        fillColor: state.targetType == TargetType.allChosenDevices ? disabledFillColor : null,
                       ),
-                      readOnly: state.targetType == TargetType.all,
+                      readOnly: state.targetType == TargetType.allChosenDevices,
                       validator: (value) {
-                        if (state.targetType != TargetType.all && (value == null || value.trim().isEmpty)) {
+                        if (state.targetType != TargetType.allChosenDevices &&
+                            (value == null || value.trim().isEmpty)) {
                           return 'Target ${_targetTypeDescription(state.targetType)} is required';
                         }
                         return null;
@@ -527,7 +581,7 @@ class _FcmSenderScreenState extends State<FcmSenderScreen> {
         return 'Token';
       case TargetType.topic:
         return 'Topic Name';
-      case TargetType.all:
+      case TargetType.allChosenDevices:
         return 'Topic Name (All)';
     }
   }

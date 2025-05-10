@@ -53,7 +53,7 @@ class FcmSenderState {
 
   bool get isFormPotentiallyValid {
     if (serviceAccountJson.isEmpty || projectId.isEmpty) return false;
-    if (targetType != TargetType.all && targetValue.isEmpty) return false;
+    if (targetType != TargetType.allChosenDevices && targetValue.isEmpty) return false;
 
     if (additionalDataJson.isNotEmpty) {
       try {
@@ -72,6 +72,7 @@ class FcmSenderState {
     String? serviceAccountJson,
     String? projectId,
     TargetType? targetType,
+    TargetDevice? targetDevice,
     String? targetValue,
     String? dataTitle,
     String? dataBody,
@@ -92,6 +93,7 @@ class FcmSenderState {
       serviceAccountJson: serviceAccountJson ?? this.serviceAccountJson,
       projectId: projectId ?? this.projectId,
       targetType: targetType ?? this.targetType,
+      targetDevice: targetDevice ?? this.targetDevice,
       targetValue: targetValue ?? this.targetValue,
       dataTitle: dataTitle ?? this.dataTitle,
       dataBody: dataBody ?? this.dataBody,
@@ -105,49 +107,5 @@ class FcmSenderState {
       logOutput: logOutput ?? this.logOutput,
       lastResponseBody: clearLastResponseBody ? null : (lastResponseBody ?? this.lastResponseBody),
     );
-  }
-
-  @override
-  bool operator ==(covariant FcmSenderState other) {
-    if (identical(this, other)) return true;
-
-    return other.preferences == preferences &&
-        other.preferencesLoaded == preferencesLoaded &&
-        other.serviceAccountJson == serviceAccountJson &&
-        other.projectId == projectId &&
-        other.targetType == targetType &&
-        other.targetValue == targetValue &&
-        other.dataTitle == dataTitle &&
-        other.dataBody == dataBody &&
-        other.dataDeepLink == dataDeepLink &&
-        other.additionalDataJson == additionalDataJson &&
-        other.analyticsLabel == analyticsLabel &&
-        other.androidPriority == androidPriority &&
-        other.apnsPriority == apnsPriority &&
-        other.sendStatus == sendStatus &&
-        other.statusMessage == statusMessage &&
-        other.logOutput == logOutput &&
-        other.lastResponseBody == lastResponseBody;
-  }
-
-  @override
-  int get hashCode {
-    return preferences.hashCode ^
-        preferencesLoaded.hashCode ^
-        serviceAccountJson.hashCode ^
-        projectId.hashCode ^
-        targetType.hashCode ^
-        targetValue.hashCode ^
-        dataTitle.hashCode ^
-        dataBody.hashCode ^
-        dataDeepLink.hashCode ^
-        additionalDataJson.hashCode ^
-        analyticsLabel.hashCode ^
-        androidPriority.hashCode ^
-        apnsPriority.hashCode ^
-        sendStatus.hashCode ^
-        statusMessage.hashCode ^
-        logOutput.hashCode ^
-        lastResponseBody.hashCode;
   }
 }

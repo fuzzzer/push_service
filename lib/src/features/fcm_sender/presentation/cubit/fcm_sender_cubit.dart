@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+
 import 'package:push_service/lib.dart';
 
 class FcmSenderCubit extends Cubit<FcmSenderState> {
@@ -57,9 +58,9 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
 
   void updateTargetType(TargetType type) {
     String newValue = state.targetValue;
-    if (type == TargetType.all) {
+    if (type == TargetType.allChosenDevices) {
       newValue = DEFAULT_ALL_DEVICES_TOPIC;
-    } else if (state.targetType == TargetType.all) {
+    } else if (state.targetType == TargetType.allChosenDevices) {
       newValue = '';
     }
     emit(state.copyWith(targetType: type, targetValue: newValue));
@@ -67,10 +68,14 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
   }
 
   void updateTargetValue(String value) {
-    if (state.targetType != TargetType.all) {
+    if (state.targetType != TargetType.allChosenDevices) {
       emit(state.copyWith(targetValue: value));
       _preferencesService.saveTarget(type: state.targetType, value: value);
     }
+  }
+
+  void updateTargetDevice(TargetDevice device) {
+    emit(state.copyWith(targetDevice: device));
   }
 
   void updateDataTitle(String value) => emit(state.copyWith(dataTitle: value));
@@ -95,8 +100,9 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
 
   void _addToLog(String message) {
     final timestamp = DateFormat('yyyy-MM-dd HH:mm:ss.SSS').format(DateTime.now());
-    final newLog = '$state.logOutput[$timestamp] $message\n';
 
+    final currentLog = state.logOutput;
+    final newLog = '$currentLog[$timestamp] $message\n';
     emit(state.copyWith(logOutput: newLog));
   }
 
@@ -106,7 +112,7 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
 
   Future<void> sendFcm({required bool validateOnly}) async {
     clearLog();
-    _addToLog('Starting request... (Validate Only: $validateOnly)');
+    _addToLog('Starting request... (Validate Only: $validateOnly, Target Device: ${state.targetDevice.name})');
     emit(
       state.copyWith(
         sendStatus: FcmSendStatus.loading,
@@ -125,7 +131,7 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
       _addToLog('Validation failed: Missing Project ID or Service Account JSON.');
       return;
     }
-    if (state.targetType != TargetType.all && state.targetValue.isEmpty) {
+    if (state.targetType != TargetType.allChosenDevices && state.targetValue.isEmpty) {
       emit(
         state.copyWith(
           sendStatus: FcmSendStatus.failure,
@@ -145,9 +151,9 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
       targetType: state.targetType,
       targetDevice: state.targetDevice,
       targetValue: state.targetValue,
-      titleOverride: state.dataTitle,
-      bodyOverride: state.dataBody,
-      deepLinkOverride: state.dataDeepLink,
+      title: state.dataTitle,
+      body: state.dataBody,
+      deepLink: state.dataDeepLink,
       additionalDataJson: state.additionalDataJson,
       analyticsLabel: state.analyticsLabel,
       androidPriority: state.androidPriority,
@@ -155,7 +161,8 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
     );
 
     _addToLog('Project ID: ${config.projectId}');
-    _addToLog('Target Type: ${state.targetType}');
+    _addToLog('Target Type: ${state.targetType.name}');
+    _addToLog('Target Device: ${messageData.targetDevice.name}');
     _addToLog('Target Value: ${messageData.targetValue}');
     if (messageData.analyticsLabel != null && messageData.analyticsLabel!.isNotEmpty) {
       _addToLog('Analytics Label: ${messageData.analyticsLabel}');
@@ -168,21 +175,31 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
     }
     _addToLog('Additional Data JSON: ${messageData.additionalDataJson ?? '(empty)'}');
 
-    final SendFcmResponse response;
+    final SendFcmResponse response = switch (messageData.targetDevice) {
+      TargetDevice.ios => await _fcmRepositoryIos.sendFcm(
+          config: config,
+          messageData: messageData,
+          validateOnly: validateOnly,
+        ),
+      TargetDevice.android => await _fcmRepositoryAndroid.sendFcm(
+          config: config,
+          messageData: messageData,
+          validateOnly: validateOnly,
+        ),
+      TargetDevice.all => await () async {
+          await _fcmRepositoryAndroid.sendFcm(
+            config: config,
+            messageData: messageData,
+            validateOnly: validateOnly,
+          );
 
-    if (messageData.targetDevice == TargetDevice.android) {
-      response = await _fcmRepositoryAndroid.sendFcm(
-        config: config,
-        messageData: messageData,
-        validateOnly: validateOnly,
-      );
-    } else {
-      response = await _fcmRepositoryIos.sendFcm(
-        config: config,
-        messageData: messageData,
-        validateOnly: validateOnly,
-      );
-    }
+          return await _fcmRepositoryIos.sendFcm(
+            config: config,
+            messageData: messageData,
+            validateOnly: validateOnly,
+          );
+        }()
+    };
 
     String finalPayloadJson = '{}';
     try {
@@ -193,14 +210,14 @@ class FcmSenderCubit extends Cubit<FcmSenderState> {
           finalDataPayload = parsedJson.map((key, value) => MapEntry(key.toString(), value.toString()));
         }
       }
-      if (messageData.titleOverride != null && messageData.titleOverride!.isNotEmpty) {
-        finalDataPayload['title'] = messageData.titleOverride!;
+      if (messageData.title != null && messageData.title!.isNotEmpty) {
+        finalDataPayload['title'] = messageData.title!;
       }
-      if (messageData.bodyOverride != null && messageData.bodyOverride!.isNotEmpty) {
-        finalDataPayload['body'] = messageData.bodyOverride!;
+      if (messageData.body != null && messageData.body!.isNotEmpty) {
+        finalDataPayload['body'] = messageData.body!;
       }
-      if (messageData.deepLinkOverride != null && messageData.deepLinkOverride!.isNotEmpty) {
-        finalDataPayload['deepLink'] = messageData.deepLinkOverride!;
+      if (messageData.deepLink != null && messageData.deepLink!.isNotEmpty) {
+        finalDataPayload['deepLink'] = messageData.deepLink!;
       }
       finalPayloadJson = jsonEncode(finalDataPayload);
     } catch (e) {
